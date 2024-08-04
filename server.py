@@ -1,4 +1,4 @@
-import random
+import pickle
 from time import sleep
 
 import pytz
@@ -14,9 +14,13 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket) -> bool:
+        if len(self.active_connections) >= 50:
+            await websocket.close()
+            return False
         await websocket.accept()
         self.active_connections.append(websocket)
+        return True
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
@@ -45,7 +49,9 @@ class Server:
 
         @app.websocket("/ws/{client_id}")
         async def websocket_endpoint(websocket: WebSocket, client_id: int):
-            await self.__manager.connect(websocket)
+            ok = await self.__manager.connect(websocket)
+            if not ok:
+                return
             chat = self.__db.get_chat(client_id)
 
             # if chat is not in db, create a new chat
@@ -67,16 +73,25 @@ class Server:
                 chat = self.__db.create_chat(client_id, timezone)
 
             # handle messages
+            bytes_left = -1  # number of bytes left to receive in multimedia message
+            filename = None  # filename of multimedia message
             try:
                 while True:
                     data = await websocket.receive()
                     if data["type"] == 'websocket.receive':
-                        if data["text"]:
+                        if "text" in data:
                             await self.__handle_text_message(
                                 websocket, data["text"], chat)
-                        elif data["bytes"]:
-                            await self.__handle_multimedia_message(data["bytes"]
-                                                                   )
+                        elif "bytes" in data:
+                            if bytes_left == -1:  # new multimedia message
+                                bytes_left, filename = self.__parse_metadata(
+                                    data["bytes"], chat.timezone)
+                            elif bytes_left > 0:
+                                bytes_left = await self.__handle_multimedia_message(
+                                    websocket, data["bytes"], filename,
+                                    bytes_left)
+                                if bytes_left == 0:
+                                    bytes_left = -1  # reset
 
                     elif data["type"] == 'websocket.disconnect':
                         break
@@ -85,21 +100,44 @@ class Server:
 
     async def __handle_text_message(self, ws: WebSocket, message: str,
                                     chat: Chat):
-        sleep(random.uniform(0, 1))
-        if not is_now_between_range_in_timezone("08:00", "23:59",
+        if not is_now_between_range_in_timezone("05:00", "23:59",
                                                 chat.timezone):
             return
-        await self.__manager.send_text("Saved: %s" % message, ws)
         self.__db.create_message(chat.id, message)
+        await self.__manager.send_text("Saved: %s" % message, ws)
 
-    async def __handle_multimedia_message(self, ws: WebSocket, message: bytes):
-        # _todo: handle multimedia message
-        pass
+    def __parse_metadata(self, message: bytes,
+                         timezone: str) -> tuple[str, str | None]:
+        metadata = pickle.loads(message)
+        bytes_left = metadata["size"]
+        filename = None
+        if metadata["type"] == "voice" and is_now_between_range_in_timezone(
+                "08:00", "12:00", timezone):
+            filename = metadata["name"]
+            sleep(1)
+        elif metadata["type"] == "video" and is_now_between_range_in_timezone(
+                "08:00", "23:59", timezone):
+            filename = metadata["name"]
+            sleep(2)
+        return bytes_left, filename
+
+    # handle stream of bytes and return number of bytes left
+    async def __handle_multimedia_message(self, ws: WebSocket, message: bytes,
+                                          file_to_save: str | None,
+                                          bytes_left) -> int:
+        if file_to_save:
+            with open(file_to_save, "ab") as f:
+                f.write(message)
+        bytes_left -= len(message)
+        if bytes_left == 0 and file_to_save:
+            await self.__manager.send_text("Saved multimedia message", ws)
+        return bytes_left
 
     def start(self):
         uvicorn.run(self.__app,
                     host="0.0.0.0",
                     port=8000,
+                    ws_max_queue=500,
                     ws_ping_interval=10,
                     ws_ping_timeout=2)
 

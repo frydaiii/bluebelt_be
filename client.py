@@ -71,7 +71,11 @@ class File:
     def get_bytes_stream(self, size: int = 1024):
         if self.__type == File.Type.LOCAL:
             with open(self.__address, 'rb') as file:
-                yield file.read(size)
+                while True:
+                    data = file.read(size)
+                    if not data:
+                        break
+                    yield data
         elif self.__type == File.Type.REMOTE:
             response = requests.get(self.__address, stream=True)
             for chunk in response.iter_content(size):
@@ -87,7 +91,7 @@ class Client:
     def init_connection(self):
 
         def on_message(ws, message):
-            print(f"Reply from server: {message}")
+            print("Reply from server: %s\n" % message)
 
         def on_ping(ws, data):
             # print("Got a ping! A pong reply has already been automatically sent.")
@@ -138,17 +142,17 @@ class Client:
         file_metadata["type"] = type
         self.__conn.send_bytes(pickle.dumps(file_metadata))
 
-        for chunk in file_metadata["size"]:
-            ret = self.__conn.send_bytes(chunk)
-            while ret < len(chunk):
-                ret += self.__conn.send_bytes(chunk[ret:])
+        for chunk in file.get_bytes_stream(256):
+            self.__conn.send_bytes(chunk)
 
 
 if __name__ == "__main__":
     client = Client(uuid.uuid4().int >> 120)
     client.init_connection()
-    while True:
-        message = input("Enter message: ")
-        client.send_msg(message)
-        if message == "exit":
-            break
+    # client.send_video("/Users/manh/Downloads/Vinfast VF3_  Shot by HMAX.3D.mp4")
+    # client.send_video("/Users/manh/Downloads/Briar 1v9.mp4")
+    # while True:
+    #     message = input("Enter message: ")
+    #     client.send_msg(message)
+    #     if message == "exit":
+    #         break
