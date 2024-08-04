@@ -45,10 +45,18 @@ class Server:
         self.__init_app()
 
     def __init_app(self):
+        """
+        Initialize the FastAPI app with routes and websocket endpoint.
+        """
         app: FastAPI = self.__app
 
         @app.websocket("/ws/{client_id}")
         async def websocket_endpoint(websocket: WebSocket, client_id: int):
+            """
+            Handle websocket connections from clients. Each client is identified
+            by a unique client_id. Please note that the client must send its timezone
+            as the first message after connecting.
+            """
             ok = await self.__manager.connect(websocket)
             if not ok:
                 return
@@ -100,6 +108,9 @@ class Server:
 
     async def __handle_text_message(self, ws: WebSocket, message: str,
                                     chat: Chat):
+        """
+        Handle text message from client if it is in the valid time range.
+        """
         if not is_now_between_range_in_timezone("05:00", "23:59",
                                                 chat.timezone):
             return
@@ -108,6 +119,10 @@ class Server:
 
     def __parse_metadata(self, message: bytes,
                          timezone: str) -> tuple[str, str | None]:
+        """
+        Parse metadata of multimedia message and attach filename to save 
+        if it is in the valid time range. Return number of bytes left and filename.
+        """
         metadata = pickle.loads(message)
         bytes_left = metadata["size"]
         filename = None
@@ -121,10 +136,12 @@ class Server:
             sleep(2)
         return bytes_left, filename
 
-    # handle stream of bytes and return number of bytes left
     async def __handle_multimedia_message(self, ws: WebSocket, message: bytes,
                                           file_to_save: str | None,
                                           bytes_left) -> int:
+        """
+        Handle multimedia message from client and return number of bytes left.
+        """
         if file_to_save:
             with open(file_to_save, "ab") as f:
                 f.write(message)
@@ -134,6 +151,9 @@ class Server:
         return bytes_left
 
     def start(self):
+        """
+        Start the server.
+        """
         uvicorn.run(self.__app,
                     host="0.0.0.0",
                     port=8000,

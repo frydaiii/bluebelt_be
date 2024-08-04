@@ -31,6 +31,9 @@ class File:
             return TypeError("Invalid file address")
 
     def get_metadata(self) -> dict:
+        """
+        Get metadata of the file.
+        """
         if self.__type == File.Type.LOCAL:
             return {
                 "name": os.path.basename(self.__address),
@@ -90,6 +93,10 @@ class Client:
         self.__conn = None
 
     def init_connection(self):
+        """
+        Initialize connection with server. Send the client's timezone to help 
+        server in handling time-related tasks.
+        """
 
         def on_message(ws, message):
             print("Reply from server: %s\n" % message)
