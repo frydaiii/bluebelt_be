@@ -1,6 +1,7 @@
 import os
 import pickle
 import re
+import sys
 import threading
 import time
 import uuid
@@ -108,18 +109,18 @@ class Client:
                                    on_ping=on_ping,
                                    on_pong=on_pong)
 
-        t = threading.Thread(target=self.__conn.run_forever,
-                             kwargs={
-                                 "ping_interval": 10,
-                                 "ping_timeout": 1
-                             })
-        t.start()
+        self.__run_app = threading.Thread(target=self.__conn.run_forever,
+                                          kwargs={
+                                              "ping_interval": 10,
+                                              "ping_timeout": 1
+                                          })
+        self.__run_app.daemon = True
+        self.__run_app.start()
         # get current timezone and send it to server
         while not self.__conn.sock.connected:
             print("waiting for connection")
             time.sleep(1)
         self.send_msg(str(get_localzone()))
-        # t.join()
 
     def get_id(self):
         return self.__client_id
@@ -151,6 +152,8 @@ if __name__ == "__main__":
     client.init_connection()
     # client.send_video("/Users/manh/Downloads/Vinfast VF3_  Shot by HMAX.3D.mp4")
     # client.send_video("/Users/manh/Downloads/Briar 1v9.mp4")
+    time.sleep(5)
+    sys.exit(0)
     # while True:
     #     message = input("Enter message: ")
     #     client.send_msg(message)
