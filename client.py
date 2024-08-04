@@ -1,12 +1,14 @@
 import os
 import pickle
-import struct
+import re
+import threading
+import time
 import uuid
 from enum import Enum
-import re
 
 import requests
-from websocket import create_connection
+from tzlocal import get_localzone
+from websocket import WebSocketApp
 
 from config import config
 from utils import is_downloadable, is_url
@@ -83,16 +85,43 @@ class Client:
         self.__conn = None
 
     def init_connection(self):
-        self.__conn = create_connection(
-            "%s/%d" % (config["ws_endpoint"], self.__client_id))
+
+        def on_message(ws, message):
+            print(f"Reply from server: {message}")
+
+        def on_ping(ws, data):
+            # print("Got a ping! A pong reply has already been automatically sent.")
+            pass
+
+        def on_pong(ws, data):
+            # print("Got a pong! No need to respond")
+            pass
+
+        print("init connection with client id %d" % self.__client_id)
+        self.__conn = WebSocketApp("%s/%d" %
+                                   (config["ws_endpoint"], self.__client_id),
+                                   on_message=on_message,
+                                   on_ping=on_ping,
+                                   on_pong=on_pong)
+
+        t = threading.Thread(target=self.__conn.run_forever,
+                             kwargs={
+                                 "ping_interval": 10,
+                                 "ping_timeout": 1
+                             })
+        t.start()
+        # get current timezone and send it to server
+        while not self.__conn.sock.connected:
+            print("waiting for connection")
+            time.sleep(1)
+        self.send_msg(str(get_localzone()))
+        # t.join()
 
     def get_id(self):
         return self.__client_id
 
     def send_msg(self, text: str):
-        ret = self.__conn.send_text(text)
-        while ret < len(text):
-            ret += self.__conn.send_text(text[ret:])
+        self.__conn.send_text(text)
 
     def send_voice(self, file_address: str):
         self.__send_file_stream(file_address, "voice")
@@ -116,16 +145,10 @@ class Client:
 
 
 if __name__ == "__main__":
-    client = Client(uuid.uuid4().int)
+    client = Client(uuid.uuid4().int >> 120)
     client.init_connection()
-    client.send_msg("Hello")
-    client.close_connection()
-    # with closing(create_connection("%s/%d"%(config["ws_endpoint"], client.get_id()))) as conn:
-    #     while True:
-    #         print(1)
-    #         message = input("Enter message: ")
-    #         conn.send(message)
-    #         result = conn.recv()
-    #         print(f"Received: {result}")
-    #         if message == "exit":
-    #             break
+    while True:
+        message = input("Enter message: ")
+        client.send_msg(message)
+        if message == "exit":
+            break
