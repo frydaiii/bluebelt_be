@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session, DeclarativeBase
 from datetime import datetime
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Enum
+import enum
 
 
 class Base(DeclarativeBase):
@@ -22,11 +23,17 @@ class Chat(Base):
 
 
 class Message(Base):
+
+    class Status(enum.Enum):
+        SUCCESS = "success"
+        UNSUCCESS = "unsuccess"
+
     __tablename__ = "message"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     chat_id: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime)
+    status: Mapped[Status] = mapped_column(Enum(Status))
 
     def __repr__(self):
         return f"<Message(id={self.id}, chat_id={self.chat_id}, content={self.content}, created_at={self.created_at})>"
@@ -50,10 +57,12 @@ class DB:
         self.__session.commit()
         return chat
 
-    def create_message(self, chat_id: int, content: str):
+    def create_message(self, chat_id: int, content: str,
+                       status: Message.Status):
         message = Message(chat_id=chat_id,
                           content=content,
-                          created_at=datetime.now())
+                          created_at=datetime.now(),
+                          status=status)
         self.__session.add(message)
         self.__session.commit()
         return message

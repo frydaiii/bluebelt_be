@@ -5,7 +5,7 @@ import pytz
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-from db import DB, Chat
+from db import DB, Chat, Message
 from utils import is_now_between_range_in_timezone
 
 
@@ -97,7 +97,7 @@ class Server:
                             elif bytes_left > 0:
                                 bytes_left = await self.__handle_multimedia_message(
                                     websocket, data["bytes"], filename,
-                                    bytes_left)
+                                    bytes_left, chat)
                                 if bytes_left == 0:
                                     bytes_left = -1  # reset
 
@@ -113,8 +113,9 @@ class Server:
         """
         if not is_now_between_range_in_timezone("05:00", "23:59",
                                                 chat.timezone):
+            self.__db.create_message(chat.id, message, Message.Status.UNSUCCESS)
             return
-        self.__db.create_message(chat.id, message)
+        self.__db.create_message(chat.id, message, Message.Status.SUCCESS)
         await self.__manager.send_text("Saved: %s" % message, ws)
 
     def __parse_metadata(self, message: bytes,
@@ -137,8 +138,8 @@ class Server:
         return bytes_left, filename
 
     async def __handle_multimedia_message(self, ws: WebSocket, message: bytes,
-                                          file_to_save: str | None,
-                                          bytes_left) -> int:
+                                          file_to_save: str | None, bytes_left,
+                                          chat: Chat) -> int:
         """
         Handle multimedia message from client and return number of bytes left.
         """
@@ -147,7 +148,12 @@ class Server:
                 f.write(message)
         bytes_left -= len(message)
         if bytes_left == 0 and file_to_save:
+            self.__db.create_message(chat.id, file_to_save,
+                                     Message.Status.SUCCESS)
             await self.__manager.send_text("Saved multimedia message", ws)
+        if bytes_left == 0 and not file_to_save:
+            self.__db.create_message(chat.id, "", Message.Status.UNSUCCESS)
+            await self.__manager.send_text("Discarded multimedia message", ws)
         return bytes_left
 
     def start(self):

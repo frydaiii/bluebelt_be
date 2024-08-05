@@ -157,8 +157,9 @@ class Client:
 if __name__ == "__main__":
     client = Client(uuid.uuid4().int >> 120)
     client.init_connection()
-    # client.send_video("/Users/manh/Downloads/Vinfast VF3_  Shot by HMAX.3D.mp4")
-    # client.send_video("/Users/manh/Downloads/Briar 1v9.mp4")
+    client.send_video(
+        "https://tmpfiles.org/dl/10593789/vinfastvf3_shotbyhmax.3d.mp4")
+    client.send_video("/Users/manh/Downloads/Briar 1v9.mp4")
     time.sleep(5)
     sys.exit(0)
     # while True:
