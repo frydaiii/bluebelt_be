@@ -5,30 +5,33 @@
 
 ## Table of Contents
 1. Introduction
-2. Requirements
+2. Components
+    - Client
+    - Server
 3. System Architecture
 4. Communication Protocol
 5. Heart-Beating by using Ping-Pong Mechanism
 6. Sequence Diagrams
-7. Scalability considerations.
-8. Plan to execute the implementation.
+7. Scalability considerations
+8. Plan to execute the implementation
 
 ## Introduction
 This document outlines the design of a client-server communication system where the client can initialize and disable connections, exchange text messages with the server, and maintain a heart-beating connection to ensure the connection is alive.
 
-## Requirements
-1. Client Features:
+## Components
+1. Client:
     - Initialize connection to the server
     - Disable connection from the server
-    - Send and receive text and multimedia messages
-    - Maintain an active connection through Ping-Pong frame.
+    - Send and receive text and multimedia messages. Save to file if the message is multimedia type
+    - Maintain an active connection through Ping-Pong frame
 
-2. Server Features:
+2. Server:
     - Accept connections from multiple clients
-    - Send and receive text and multimedia messages, save incoming messages to database if it is in a valid time range
-    - If the client is disconnected before the message is completely received, the server will discard the message
+    - Send and receive text and multimedia messages. Accept the message if it is in a valid time range:
+        - Text message: Save to database
+        - Multimedia message: Save to file and save the file path to the database
     - Expose an API to retrieve messages with pagination
-    - Maintain an active connection through Ping-Pong frame.
+    - Maintain an active connection through Ping-Pong frame
 
 ## System Architecture
 The system follows a client-server architecture where multiple clients can communicate with a central server.
@@ -43,7 +46,7 @@ The system follows a client-server architecture where multiple clients can commu
 ## Communication Protocol
 
 ### Message Format
-- Text Message: Plain string.
+- Text Message: Plain string
 - Multimedia Message: Bytes stream
 
 ### Port
@@ -100,10 +103,10 @@ Client                     Server
   |                           |
 ```
 ## Scalability considerations
-- **Vertical Scaling**: Increase the resources (CPU, RAM) of the server. This is limited by the physical capabilities of the server hardware.
+- **Vertical Scaling**: Increase the resources (CPU, RAM) of the server. This is limited by the physical capabilities of the server hardware
 - **Horizontal Scaling**: Distribute the load across multiple servers. This typically involves:
-    - **Load Balancers**: Use load balancers to distribute incoming WebSocket connections across multiple server instances.
-    - **Sticky Sessions**: Ensure that once a WebSocket connection is established, subsequent communication from that client is directed to the same server instance to maintain the connection.
+    - **Load Balancers**: Use load balancers to distribute incoming WebSocket connections across multiple server instances
+    - **Sticky Sessions**: Ensure that once a WebSocket connection is established, subsequent communication from that client is directed to the same server instance to maintain the connection
 
 *Note: ensure data consistency when implementing a distributed system.*
 ## Plan to execute the implementation
