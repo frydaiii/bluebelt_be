@@ -7,14 +7,11 @@
 1. Introduction
 2. Requirements
 3. System Architecture
-4. Components
-    - Client
-    - Server
-5. Communication Protocol
-6. Heart-Beating by using Ping-Pong Mechanism
-7. Sequence Diagrams
-8. Scalability considerations.
-9. Plan to execute the implementation.
+4. Communication Protocol
+5. Heart-Beating by using Ping-Pong Mechanism
+6. Sequence Diagrams
+7. Scalability considerations.
+8. Plan to execute the implementation.
 
 ## Introduction
 This document outlines the design of a client-server communication system where the client can initialize and disable connections, exchange text messages with the server, and maintain a heart-beating connection to ensure the connection is alive.
@@ -23,18 +20,18 @@ This document outlines the design of a client-server communication system where 
 1. Client Features:
     - Initialize connection to the server
     - Disable connection from the server
-    - Send and receive text messages
-    - Send bytes stream for multimedia messages
+    - Send and receive text and multimedia messages
     - Maintain an active connection through Ping-Pong frame.
 
 2. Server Features:
     - Accept connections from multiple clients
-    - Receive and send text messages to clients
-    - Receive and save bytes stream to files
+    - Send and receive text and multimedia messages, save incoming messages to database if it is in a valid time range
+    - If the client is disconnected before the message is completely received, the server will discard the message
+    - Expose an API to retrieve messages with pagination
     - Maintain an active connection through Ping-Pong frame.
 
 ## System Architecture
-The system follows a client-server architecture where multiple clients can communicate with a central server. The communication will be facilitated over TCP/IP for reliable transmission.
+The system follows a client-server architecture where multiple clients can communicate with a central server.
 
 ### Diagram
 ```
@@ -43,26 +40,11 @@ The system follows a client-server architecture where multiple clients can commu
 +---------+        +---------+
 ```
 
-## Components
-
-### Client
-- Connection Initialization: Establish a connection to the server.
-- Connection Termination: Disconnect from the server.
-- Messaging: Send and receive text messages.
-- Messaging: Send bytes stream for multimedia messages
-- Heart-Beat Response: Periodically send a ping signal and respond to incoming ping signals from others with a pong.
-
-### Server
-- Connection Handling: Accept connections from clients.
-- Messaging: Send and receive text messages.
-- Messaging: Receive and save bytes stream to files
-- Heart-Beat Response: Periodically send a ping signal and respond to incoming ping signals from others with a pong.
-
 ## Communication Protocol
 
 ### Message Format
 - Text Message: Plain string.
-- Multimedia Message: Bytes
+- Multimedia Message: Bytes stream
 
 ### Port
 - The server will listen on a specified TCP port (e.g., 8000).
@@ -79,6 +61,9 @@ Client                                Server
   |                                      |
   |---- Send timezone as first msg ----->|
   |                                      |
+  |                            Create new chat in DB
+  |                                 if not exist
+  |                                      |
 
 ```
 ### Messaging
@@ -87,9 +72,13 @@ Client                           Server
   |                                 |
   |------ Send Text Message ------->|
   |                                 |
+  |                            Save if valid
+  |                                 |
   |<--------- Send Status ----------|
   |                                 |
   |--- Send Multimedia Message ---->|
+  |                                 |
+  |                            Save if valid
   |                                 |
   |<--------- Send Status ----------|
   |                                 |
@@ -115,10 +104,11 @@ Client                     Server
 - **Horizontal Scaling**: Distribute the load across multiple servers. This typically involves:
     - **Load Balancers**: Use load balancers to distribute incoming WebSocket connections across multiple server instances.
     - **Sticky Sessions**: Ensure that once a WebSocket connection is established, subsequent communication from that client is directed to the same server instance to maintain the connection.
-  <br>
+
 *Note: ensure data consistency when implementing a distributed system.*
 ## Plan to execute the implementation
 - Implement the client with required functions
 - Implement the server with required functions
+- Design DB schema for the server
 - ~Implement unittest for these function, and intergration test for the system~
 - Manual test workflow of the system
