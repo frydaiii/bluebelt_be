@@ -1,2 +1,5 @@
 .venv
 __pycache__
+.vscode
+local.db
+test.py
