@@ -1,89 +1,14 @@
-import os
 import pickle
-import re
 import sys
 import threading
 import time
 import uuid
-from enum import Enum
 
-import requests
 from tzlocal import get_localzone
 from websocket import WebSocketApp
 
 from config import config
-from utils import is_downloadable, is_url
-
-
-class File:
-
-    class Type(Enum):
-        LOCAL = 1
-        REMOTE = 2
-
-    def __init__(self, address: str):
-        self.__address = address  # file path or url
-        if os.path.exists(self.__address):
-            self.__type = File.Type.LOCAL
-        elif is_url(self.__address) and is_downloadable(self.__address):
-            self.__type = File.Type.REMOTE
-        else:
-            return TypeError("Invalid file address")
-
-    def get_metadata(self) -> dict:
-        """
-        Get metadata of the file.
-        """
-        if self.__type == File.Type.LOCAL:
-            return {
-                "name": os.path.basename(self.__address),
-                "size": os.path.getsize(self.__address)
-            }
-        elif self.__type == File.Type.REMOTE:
-            response = requests.head(self.__address)
-            content_disposition = response.headers.get('content-disposition')
-            if content_disposition:
-                filename = re.findall("filename=(.+)", content_disposition)[0]
-                return {
-                    "name": filename,
-                    "size": int(response.headers.get('content-length', 0))
-                }
-            else:
-                raise ValueError(
-                    "Filename not found in content-disposition of this file")
-
-    def get_file_name(self) -> str:
-        if self.__type == File.Type.LOCAL:
-            return os.path.basename(self.__address)
-        elif self.__type == File.Type.REMOTE:
-            response = requests.head(self.__address)
-            content_disposition = response.headers.get('content-disposition')
-            if content_disposition:
-                filename = re.findall("filename=(.+)", content_disposition)[0]
-                return filename
-            else:
-                raise ValueError(
-                    "Filename not found in content-disposition of this file")
-
-    def get_file_size(self) -> int:
-        if self.__type == File.Type.LOCAL:
-            return os.path.getsize(self.__address)
-        elif self.__type == File.Type.REMOTE:
-            response = requests.head(self.__address)
-            return int(response.headers.get('content-length', 0))
-
-    def get_bytes_stream(self, size: int = 1024):
-        if self.__type == File.Type.LOCAL:
-            with open(self.__address, 'rb') as file:
-                while True:
-                    data = file.read(size)
-                    if not data:
-                        break
-                    yield data
-        elif self.__type == File.Type.REMOTE:
-            response = requests.get(self.__address, stream=True)
-            for chunk in response.iter_content(size):
-                yield chunk
+from file import File
 
 
 class Client:
@@ -91,6 +16,9 @@ class Client:
     def __init__(self, client_id: int):
         self.__client_id = client_id
         self.__conn = None
+        self.__run_app = None
+        self.__bytes_left = -1  # number of bytes left to receive in multimedia message
+        self.__multimedia_metadata = None
 
     def init_connection(self):
         """
@@ -99,7 +27,22 @@ class Client:
         """
 
         def on_message(ws, message):
-            print("Reply from server: %s\n" % message)
+            if isinstance(message, str):
+                print(message)
+            elif isinstance(message, bytes):
+                if self.__bytes_left == -1:  # first chunk
+                    self.__multimedia_metadata = pickle.loads(message)
+                    self.__bytes_left = self.__multimedia_metadata["size"]
+                    print(self.__multimedia_metadata)
+                else:
+                    filename = "CLIENT_RECEIVED_%s" % self.__multimedia_metadata[
+                        "name"]
+                    with open(filename, "ab") as file:
+                        file.write(message)
+                        self.__bytes_left -= len(message)
+                    if self.__bytes_left == 0:
+                        print("File received")
+                        self.__bytes_left = -1
 
         def on_ping(ws, data):
             # print("Got a ping! A pong reply has already been automatically sent.")
@@ -127,6 +70,7 @@ class Client:
         while not self.__conn.sock.connected:
             print("waiting for connection")
             time.sleep(1)
+        print("connected")
         self.send_msg(str(get_localzone()))
 
     def get_id(self):
@@ -157,8 +101,8 @@ class Client:
 if __name__ == "__main__":
     client = Client(uuid.uuid4().int >> 120)
     client.init_connection()
-    client.send_video(
-        "https://tmpfiles.org/dl/10593789/vinfastvf3_shotbyhmax.3d.mp4")
+    # client.send_video(
+    #     "https://tmpfiles.org/dl/10593789/vinfastvf3_shotbyhmax.3d.mp4")
     client.send_video("/Users/manh/Downloads/Briar 1v9.mp4")
     time.sleep(5)
     sys.exit(0)

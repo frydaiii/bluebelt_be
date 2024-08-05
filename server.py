@@ -1,14 +1,21 @@
+import os
 import pickle
 from time import sleep
+from typing import List
 
 import pytz
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 
 from db import DB, Chat, Message
+from file import File
 from utils import is_now_between_range_in_timezone
-from typing import List
-from fastapi import Query
+
+TEXT_SUCCESS_RESPONSE = "Saved message"
+TEXT_DISCARD_RESPONSE = "Message discarded"
+AUDIO_RESPONSE = "%s/static/random_audio_to_client.mp3" % os.path.abspath(
+    os.getcwd())
+IMAGE_RESPONSE = "%s/static/okay.jpg" % os.path.abspath(os.getcwd())
 
 
 class ConnectionManager:
@@ -32,6 +39,22 @@ class ConnectionManager:
 
     async def send_json(self, data: dict, websocket: WebSocket):
         await websocket.send_json(data)
+
+    async def send_voice(self, file_address: str, websocket: WebSocket):
+        await self.__send_file_stream(file_address, "voice", websocket)
+
+    async def send_image(self, file_address: str, websocket: WebSocket):
+        await self.__send_file_stream(file_address, "image", websocket)
+
+    async def __send_file_stream(self, file_address: str, type: str,
+                                 websocket: WebSocket):
+        file = File(file_address)
+        file_metadata = file.get_metadata()
+        file_metadata["type"] = type
+        await websocket.send_bytes(pickle.dumps(file_metadata))
+
+        for chunk in file.get_bytes_stream(256):
+            await websocket.send_bytes(chunk)
 
     async def broadcast(self, message: str):
         for connection in self.active_connections:
@@ -83,8 +106,10 @@ class Server:
                 chat = self.__db.create_chat(client_id, timezone)
 
             # handle messages
+            type = None  # type of multimedia message
             bytes_left = -1  # number of bytes left to receive in multimedia message
-            filename = None  # filename of multimedia message
+            filename = None  # filename of multimedia message, filename is None if message is discarded
+            # _todo use is_discarded flag instead of filename for better readability
             try:
                 while True:
                     data = await websocket.receive()
@@ -94,13 +119,24 @@ class Server:
                                 websocket, data["text"], chat)
                         elif "bytes" in data:
                             if bytes_left == -1:  # new multimedia message
-                                bytes_left, filename = self.__parse_metadata(
+                                type, bytes_left, filename = self.__parse_metadata(
                                     data["bytes"], chat.timezone)
                             elif bytes_left > 0:
-                                bytes_left = await self.__handle_multimedia_message(
+                                bytes_left = await self.__handle_multimedia_stream(
                                     websocket, data["bytes"], filename,
                                     bytes_left, chat)
                                 if bytes_left == 0:
+                                    if filename:
+                                        await self.__manager.send_text(
+                                            TEXT_SUCCESS_RESPONSE, websocket)
+                                        await self.__manager.send_voice(
+                                            AUDIO_RESPONSE, websocket)
+                                        if type == "video":
+                                            await self.__manager.send_image(
+                                                IMAGE_RESPONSE, websocket)
+                                    else:
+                                        self.__manager.send_text(
+                                            TEXT_DISCARD_RESPONSE, websocket)
                                     bytes_left = -1  # reset
 
                     elif data["type"] == 'websocket.disconnect':
@@ -128,12 +164,13 @@ class Server:
         if not is_now_between_range_in_timezone("05:00", "23:59",
                                                 chat.timezone):
             self.__db.create_message(chat.id, message, Message.Status.UNSUCCESS)
+            await self.__manager.send_text(TEXT_DISCARD_RESPONSE, ws)
             return
         self.__db.create_message(chat.id, message, Message.Status.SUCCESS)
-        await self.__manager.send_text("Saved: %s" % message, ws)
+        await self.__manager.send_text(TEXT_SUCCESS_RESPONSE, ws)
 
     def __parse_metadata(self, message: bytes,
-                         timezone: str) -> tuple[str, str | None]:
+                         timezone: str) -> tuple[str, str, str | None]:
         """
         Parse metadata of multimedia message and attach filename to save 
         if it is in the valid time range. Return number of bytes left and filename.
@@ -143,17 +180,17 @@ class Server:
         filename = None
         if metadata["type"] == "voice" and is_now_between_range_in_timezone(
                 "08:00", "12:00", timezone):
-            filename = metadata["name"]
+            filename = "SERVER_RECEIVED_%s" % metadata["name"]
             sleep(1)
         elif metadata["type"] == "video" and is_now_between_range_in_timezone(
                 "08:00", "23:59", timezone):
-            filename = metadata["name"]
+            filename = "SERVER_RECEIVED_%s" % metadata["name"]
             sleep(2)
-        return bytes_left, filename
+        return metadata["type"], bytes_left, filename
 
-    async def __handle_multimedia_message(self, ws: WebSocket, message: bytes,
-                                          file_to_save: str | None, bytes_left,
-                                          chat: Chat) -> int:
+    async def __handle_multimedia_stream(self, ws: WebSocket, message: bytes,
+                                         file_to_save: str | None, bytes_left,
+                                         chat: Chat) -> int:
         """
         Handle multimedia message from client and return number of bytes left.
         """
@@ -164,10 +201,8 @@ class Server:
         if bytes_left == 0 and file_to_save:
             self.__db.create_message(chat.id, file_to_save,
                                      Message.Status.SUCCESS)
-            await self.__manager.send_text("Saved multimedia message", ws)
         if bytes_left == 0 and not file_to_save:
             self.__db.create_message(chat.id, "", Message.Status.UNSUCCESS)
-            await self.__manager.send_text("Discarded multimedia message", ws)
         return bytes_left
 
     def start(self):
