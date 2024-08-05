@@ -16,6 +16,7 @@ TEXT_DISCARD_RESPONSE = "Message discarded"
 AUDIO_RESPONSE = "%s/static/random_audio_to_client.mp3" % os.path.abspath(
     os.getcwd())
 IMAGE_RESPONSE = "%s/static/okay.jpg" % os.path.abspath(os.getcwd())
+SOCKETS_LIMIT = 50
 
 
 class ConnectionManager:
@@ -24,7 +25,7 @@ class ConnectionManager:
         self.active_connections: list[WebSocket] = []
 
     async def connect(self, websocket: WebSocket) -> bool:
-        if len(self.active_connections) >= 50:
+        if len(self.active_connections) >= SOCKETS_LIMIT:
             await websocket.close()
             return False
         await websocket.accept()
@@ -46,6 +47,9 @@ class ConnectionManager:
     async def send_image(self, file_address: str, websocket: WebSocket):
         await self.__send_file_stream(file_address, "image", websocket)
 
+    def is_connected(self, websocket: WebSocket) -> bool:
+        return websocket in self.active_connections
+
     async def __send_file_stream(self, file_address: str, type: str,
                                  websocket: WebSocket):
         file = File(file_address)
@@ -55,10 +59,6 @@ class ConnectionManager:
 
         for chunk in file.get_bytes_stream(256):
             await websocket.send_bytes(chunk)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
 
 
 class Server:
@@ -140,9 +140,23 @@ class Server:
                                     bytes_left = -1  # reset
 
                     elif data["type"] == 'websocket.disconnect':
-                        break
+                        raise WebSocketDisconnect
             except WebSocketDisconnect:
+                # delete file and set message status to unsuccessful if has any
+                if filename and os.path.exists(filename) and bytes_left > 0:
+                    os.remove(filename)
+                    self.__db.create_message(chat.id, "",
+                                             Message.Status.UNSUCCESS)
+                    print("File deleted due to client disconnect")
                 self.__manager.disconnect(websocket)
+
+        @app.get("/chats")
+        async def get_chats(client_id: int):
+            """
+            Retrieve all chats of a specific client.
+            """
+            chats = self.__db.get_chats(client_id)
+            return [id for id in chats]
 
         @app.get("/messages")
         async def get_messages(chat_id: int,
@@ -204,7 +218,8 @@ class Server:
             self.__db.create_message(chat.id, file_to_save,
                                      Message.Status.SUCCESS)
         if bytes_left == 0 and not file_to_save:
-            self.__db.create_message(chat.id, "", Message.Status.UNSUCCESS)
+            self.__db.create_message(chat.id, "some multimedia file",
+                                     Message.Status.UNSUCCESS)
         return bytes_left
 
     def start(self):

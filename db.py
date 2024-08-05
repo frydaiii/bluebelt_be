@@ -57,6 +57,9 @@ class DB:
         self.__session.commit()
         return chat
 
+    def get_chats(self, client_id: int):
+        return self.__session.query(Chat).filter_by(client_id=client_id).all()
+
     def get_messages(self, chat_id: int, limit: int = 10, offset: int = 0):
         return self.__session.query(Message).filter_by(
             chat_id=chat_id).limit(limit).offset(offset).all()
