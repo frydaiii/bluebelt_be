@@ -7,6 +7,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from db import DB, Chat, Message
 from utils import is_now_between_range_in_timezone
+from typing import List
+from fastapi import Query
 
 
 class ConnectionManager:
@@ -105,6 +107,18 @@ class Server:
                         break
             except WebSocketDisconnect:
                 self.__manager.disconnect(websocket)
+
+        @app.get("/messages")
+        async def get_messages(chat_id: int,
+                               limit: int = Query(10, ge=1, le=100),
+                               offset: int = Query(0, ge=0)):
+            """
+            Retrieve messages for a specific chat with pagination using limit and offset.
+            """
+            messages = self.__db.get_messages(chat_id,
+                                              limit=limit,
+                                              offset=offset)
+            return messages
 
     async def __handle_text_message(self, ws: WebSocket, message: str,
                                     chat: Chat):

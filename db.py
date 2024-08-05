@@ -57,6 +57,10 @@ class DB:
         self.__session.commit()
         return chat
 
+    def get_messages(self, chat_id: int, limit: int = 10, offset: int = 0):
+        return self.__session.query(Message).filter_by(
+            chat_id=chat_id).limit(limit).offset(offset).all()
+
     def create_message(self, chat_id: int, content: str,
                        status: Message.Status):
         message = Message(chat_id=chat_id,
