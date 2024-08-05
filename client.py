@@ -129,7 +129,8 @@ if __name__ == "__main__":
                 "Enter video file path or url (enter exit to quit): ")
             client.send_video(message)
         else:
-            raise ValueError("Invalid message type")
+            print("Invalid message type")
+            break
         client.set_ready_for_new_message(False)
         if message == "exit":
             break
