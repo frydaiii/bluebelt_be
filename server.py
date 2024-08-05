@@ -180,11 +180,13 @@ class Server:
         filename = None
         if metadata["type"] == "voice" and is_now_between_range_in_timezone(
                 "08:00", "12:00", timezone):
-            filename = "SERVER_RECEIVED_%s" % metadata["name"]
+            filename = "SERVER_RECEIVED_FROM%s_%d" % (metadata["name"],
+                                                      metadata["client_id"])
             sleep(1)
         elif metadata["type"] == "video" and is_now_between_range_in_timezone(
                 "08:00", "23:59", timezone):
-            filename = "SERVER_RECEIVED_%s" % metadata["name"]
+            filename = "SERVER_RECEIVED_FROM%s_%d" % (metadata["name"],
+                                                      metadata["client_id"])
             sleep(2)
         return metadata["type"], bytes_left, filename
 

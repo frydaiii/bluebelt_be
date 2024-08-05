@@ -19,6 +19,7 @@ class Client:
         self.__run_app = None
         self.__bytes_left = -1  # number of bytes left to receive in multimedia message
         self.__multimedia_metadata = None
+        self.__ready_for_new_message = True
 
     def init_connection(self):
         """
@@ -35,14 +36,17 @@ class Client:
                     self.__bytes_left = self.__multimedia_metadata["size"]
                     print(self.__multimedia_metadata)
                 else:
-                    filename = "CLIENT_RECEIVED_%s" % self.__multimedia_metadata[
-                        "name"]
+                    filename = "CLIENT_%d_RECEIVED_%s" % (
+                        self.__client_id, self.__multimedia_metadata["name"])
                     with open(filename, "ab") as file:
                         file.write(message)
                         self.__bytes_left -= len(message)
                     if self.__bytes_left == 0:
                         print("File received")
                         self.__bytes_left = -1
+            else:
+                raise ValueError("Invalid message type")
+            self.set_ready_for_new_message(True)
 
         def on_ping(ws, data):
             # print("Got a ping! A pong reply has already been automatically sent.")
@@ -88,10 +92,17 @@ class Client:
     def close_connection(self):
         self.__conn.close()
 
+    def set_ready_for_new_message(self, ready: bool):
+        self.__ready_for_new_message = ready
+
+    def is_ready_for_new_message(self): 
+        return self.__ready_for_new_message
+
     def __send_file_stream(self, file_address: str, type: str):
         file = File(file_address)
         file_metadata = file.get_metadata()
         file_metadata["type"] = type
+        file_metadata["client_id"] = self.__client_id
         self.__conn.send_bytes(pickle.dumps(file_metadata))
 
         for chunk in file.get_bytes_stream(256):
@@ -101,13 +112,27 @@ class Client:
 if __name__ == "__main__":
     client = Client(uuid.uuid4().int >> 120)
     client.init_connection()
-    # client.send_video(
-    #     "https://tmpfiles.org/dl/10593789/vinfastvf3_shotbyhmax.3d.mp4")
-    client.send_video("/Users/manh/Downloads/Briar 1v9.mp4")
+    while True:
+        if not client.is_ready_for_new_message():
+            time.sleep(1)
+            continue
+        type = input("Enter message type: text, voice, video\n")
+        if type == "text":
+            message = input("Enter message (enter exit to quit): ")
+            client.send_msg(message)
+        elif type == "voice":
+            message = input(
+                "Enter voice file path or url (enter exit to quit): ")
+            client.send_voice(message)
+        elif type == "video":
+            message = input(
+                "Enter video file path or url (enter exit to quit): ")
+            client.send_video(message)
+        else:
+            raise ValueError("Invalid message type")
+        client.set_ready_for_new_message(False)
+        if message == "exit":
+            break
+    client.close_connection()
     time.sleep(5)
     sys.exit(0)
-    # while True:
-    #     message = input("Enter message: ")
-    #     client.send_msg(message)
-    #     if message == "exit":
-    #         break
