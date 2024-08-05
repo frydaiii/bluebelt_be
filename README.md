@@ -1,6 +1,6 @@
 # A simple client-server communication 
 This is a simple client-server communication system where multiple clients can communicate with a central server by using websockets.
-Each side can send text messages and multimedia messages (by sending streams of bytes). If the server receives a multimedia message, it will save it to a file and send a custom respond based on the type of message received.
+Each side can send text messages and multimedia messages (by sending streams of bytes). For more details, check the [SYS_DESIGN.md](SYS_DESIGN.md) file.
 
 ## Getting Started
 This project is built using Python 3.12.3. In the project directory, run:
