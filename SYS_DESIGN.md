@@ -16,18 +16,18 @@
 8. Plan to execute the implementation
 
 ## Introduction
-This document outlines the design of a client-server communication system where the client can initialize and disable connections, exchange text messages with the server, and maintain a heart-beating connection to ensure the connection is alive.
+This document outlines the design of a client-server communication system where the client can initialize and disable connections, exchange messages with the server, and maintain a heart-beating connection to ensure the connection is alive.
 
 ## Components
 1. Client:
     - Initialize connection to the server
     - Disable connection from the server
-    - Send and receive text and multimedia messages. Save to file if the message is multimedia type
+    - Send and receive text and multimedia messages. Save to file if the incoming message from server is multimedia
     - Maintain an active connection through Ping-Pong frame
 
 2. Server:
     - Accept connections from multiple clients
-    - Send and receive text and multimedia messages. Accept the message if it is in a valid time range:
+    - Send and receive text and multimedia messages. Accept the incomming message if it is in a valid time range:
         - Text message: Save to database
         - Multimedia message: Save to file and save the file path to the database
     - Expose an API to retrieve messages with pagination
