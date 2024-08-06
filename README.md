@@ -20,6 +20,7 @@ On a different terminal, start the client:
 ```
 python3 client.py
 ```
+Upon starting, the client will initialize a connection to the server. It will then prompt you to specify the type of message you want to send (text, voice, or video). Based on the chosen message type, you can then input the content of the message. The client will send this message to the server.
 ## Server endpoints
 - `/ws/{client_id}`: Websocket endpoint for clients to connect to the server. The `client_id` is a unique identifier for each client.
 - `/chats?client_id={client_id}`: GET endpoint to retrieve all chats for a client with `client_id`.
